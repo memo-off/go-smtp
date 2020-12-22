@@ -120,6 +120,7 @@ func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout t
 
 	c.setConn(conn)
 
+	conn.SetDeadline(time.Now().Add(commandTimeout))
 	_, _, err := c.Text.ReadResponse(220)
 	if err != nil {
 		c.Text.Close()
