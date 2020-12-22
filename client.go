@@ -103,6 +103,35 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 	return c, nil
 }
 
+// NewClientTO returns a new Client using an existing connection and host as a
+// server name to be used when authenticating.
+func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout time.Duration) (*Client, error) {
+	c := &Client{
+		serverName: host,
+		localName:  "localhost",
+		// As recommended by RFC 5321. For DATA command reply (3xx one) RFC
+		// recommends a slightly shorter timeout but we do not bother
+		// differentiating these.
+		CommandTimeout: commandTimeout,
+		// 10 minutes + 2 minute buffer in case the server is doing transparent
+		// forwarding and also follows recommended timeouts.
+		SubmissionTimeout: submissionTimeout,
+	}
+
+	c.setConn(conn)
+
+	_, _, err := c.Text.ReadResponse(220)
+	if err != nil {
+		c.Text.Close()
+		if protoErr, ok := err.(*textproto.Error); ok {
+			return nil, toSMTPErr(protoErr)
+		}
+		return nil, err
+	}
+
+	return c, nil
+}
+
 // NewClientLMTP returns a new LMTP Client (as defined in RFC 2033) using an
 // existing connector and host as a server name to be used when authenticating.
 func NewClientLMTP(conn net.Conn, host string) (*Client, error) {
