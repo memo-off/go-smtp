@@ -5,6 +5,7 @@
 package smtp
 
 import (
+	"bufio"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
@@ -89,7 +90,7 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 		SubmissionTimeout: 12 * time.Minute,
 	}
 
-	c.setConn(conn)
+	c.setConn(conn, 0)
 
 	_, _, err := c.Text.ReadResponse(220)
 	if err != nil {
@@ -105,7 +106,7 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 
 // NewClientTO returns a new Client using an existing connection and host as a
 // server name to be used when authenticating.
-func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout time.Duration) (*Client, error) {
+func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout time.Duration, writeBufferSize int) (*Client, error) {
 	c := &Client{
 		serverName: host,
 		localName:  "localhost",
@@ -118,7 +119,7 @@ func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout t
 		SubmissionTimeout: submissionTimeout,
 	}
 
-	c.setConn(conn)
+	c.setConn(conn, writeBufferSize)
 
 	conn.SetDeadline(time.Now().Add(commandTimeout))
 	_, _, err := c.Text.ReadResponse(220)
@@ -145,7 +146,7 @@ func NewClientLMTP(conn net.Conn, host string) (*Client, error) {
 }
 
 // setConn sets the underlying network connection for the client.
-func (c *Client) setConn(conn net.Conn) {
+func (c *Client) setConn(conn net.Conn, writeBufferSize int) {
 	c.conn = conn
 
 	var r io.Reader = conn
@@ -170,6 +171,9 @@ func (c *Client) setConn(conn net.Conn) {
 		Closer: conn,
 	}
 	c.Text = textproto.NewConn(rwc)
+	if writeBufferSize > 0 {
+		c.Text.Writer = textproto.Writer{W: bufio.NewWriterSize(w, writeBufferSize)}
+	}
 
 	_, isTLS := conn.(*tls.Conn)
 	c.tls = isTLS
@@ -298,7 +302,7 @@ func (c *Client) StartTLS(config *tls.Config) error {
 	if testHookStartTLS != nil {
 		testHookStartTLS(config)
 	}
-	c.setConn(tls.Client(c.conn, config))
+	c.setConn(tls.Client(c.conn, config), 0)
 	return c.ehlo()
 }
 
