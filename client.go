@@ -26,6 +26,8 @@ type Client struct {
 	// clients to add extensions.
 	Text *textproto.Conn
 
+	FastWriter *Writer
+
 	// keep a reference to the connection so it can be used to create a TLS
 	// connection later
 	conn net.Conn
@@ -91,6 +93,7 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 	}
 
 	c.setConn(conn, 0)
+	c.FastWriter = NewWriter(bufio.NewWriterSize(conn, 0))
 
 	_, _, err := c.Text.ReadResponse(220)
 	if err != nil {
@@ -120,6 +123,7 @@ func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout t
 	}
 
 	c.setConn(conn, writeBufferSize)
+	c.FastWriter = NewWriter(bufio.NewWriterSize(conn, writeBufferSize))
 
 	conn.SetDeadline(time.Now().Add(commandTimeout))
 	_, _, err := c.Text.ReadResponse(220)
@@ -500,6 +504,15 @@ func (c *Client) Data() (io.WriteCloser, error) {
 		return nil, err
 	}
 	return &dataCloser{c, c.Text.DotWriter(), nil}, nil
+}
+
+// return a writer that DON'T WRITE ANY DOTS except on close
+func (c *Client) DataFast() (io.WriteCloser, error) {
+	_, _, err := c.cmd(354, "DATA")
+	if err != nil {
+		return nil, err
+	}
+	return &dataCloser{c, c.FastWriter.DotWriter(), nil}, nil
 }
 
 // LMTPData is the LMTP-specific version of the Data method. It accepts a callback
