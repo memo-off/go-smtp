@@ -93,7 +93,6 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 	}
 
 	c.setConn(conn, 0)
-	c.FastWriter = NewWriter(bufio.NewWriterSize(conn, 0))
 
 	_, _, err := c.Text.ReadResponse(220)
 	if err != nil {
@@ -123,7 +122,6 @@ func NewClientTO(conn net.Conn, host string, commandTimeout, submissionTimeout t
 	}
 
 	c.setConn(conn, writeBufferSize)
-	c.FastWriter = NewWriter(bufio.NewWriterSize(conn, writeBufferSize))
 
 	conn.SetDeadline(time.Now().Add(commandTimeout))
 	_, _, err := c.Text.ReadResponse(220)
@@ -175,6 +173,8 @@ func (c *Client) setConn(conn net.Conn, writeBufferSize int) {
 		Closer: conn,
 	}
 	c.Text = textproto.NewConn(rwc)
+	c.FastWriter = NewWriter(bufio.NewWriterSize(rwc, writeBufferSize))
+
 	if writeBufferSize > 0 {
 		c.Text.Writer = textproto.Writer{W: bufio.NewWriterSize(w, writeBufferSize)}
 	}
